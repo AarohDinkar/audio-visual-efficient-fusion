@@ -1,0 +1,20 @@
+# Audio-Visual Multimodal Understanding
+# Python 3.10+
+
+torch>=2.0.0
+torchaudio>=2.0.0
+torchvision>=0.15.0
+transformers>=4.35.0
+accelerate>=0.24.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+pandas>=2.0.0
+tqdm>=4.65.0
+Pillow>=10.0.0
+
+# For MSR-VTT from Kaggle
+kagglehub>=0.2.0
+
+# For llama-cpp inference (Gemma GGUF)
+llama-cpp-python>=0.2.0
+huggingface-hub>=0.20.0

@@ -1,0 +1,71 @@
+# Audio-Visual LLM - Git Ignore
+# Excludes large datasets, models, and generated files
+
+# ============ Data & Dataset (DO NOT PUSH - too large) ============
+data/videos/*
+!data/videos/.gitkeep
+data/frames/
+data/audio/
+data/captions.json
+data/processed/
+data/msrvtt_sample/
+data/msrvtt_hf/
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.webm
+
+# ============ Model Checkpoints & Weights ============
+checkpoints/
+checkpoints/**/*.pt
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+
+# ============ Python ============
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+.env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# ============ IDE & OS ============
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ============ Hugging Face / Model Cache ============
+.cache/
+~/.cache/huggingface/
+
+# ============ Jupyter ============
+.ipynb_checkpoints/
+*.ipynb
+
+# ============ Logs & Temp ============
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# ============ Kaggle ============
+.kaggle/
+
+# Keep .gitkeep for empty dir structure
+!data/.gitkeep
