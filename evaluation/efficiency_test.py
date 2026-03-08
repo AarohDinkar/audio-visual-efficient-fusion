@@ -7,6 +7,7 @@ Simulates edge device by optionally quantizing the model.
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 import torch
 
@@ -49,7 +50,7 @@ def measure_memory(model, frames: torch.Tensor, audio: torch.Tensor) -> float:
 
 
 def run_efficiency_test(
-    checkpoint_path: Path | None = None,
+    checkpoint_path: Optional[Path] = None,
     quantize: bool = False,
     batch_size: int = 1,
 ) -> dict:

@@ -10,6 +10,8 @@ import torch
 import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from config import LLM_MODEL
+
 from .fusion import EfficientFusionLayer, AdditiveFusionLayer
 from .vision_encoder import CLIPVisionEncoder
 from .audio_encoder import WhisperAudioEncoder
@@ -26,11 +28,12 @@ class AudioVisualCaptioner(nn.Module):
         self,
         vision_encoder: str = "openai/clip-vit-base-patch32",
         audio_encoder: str = "openai/whisper-tiny",
-        llm_name: str = "google/gemma-2b",
+        llm_name: Optional[str] = None,
         fusion_type: str = "gated",  # "gated" or "additive"
         num_prefix_tokens: int = 8,
     ):
         super().__init__()
+        llm_name = llm_name or LLM_MODEL
         self.vision_enc = CLIPVisionEncoder(vision_encoder)
         self.audio_enc = WhisperAudioEncoder(audio_encoder, project_to_512=True)
         self.llm = AutoModelForCausalLM.from_pretrained(
