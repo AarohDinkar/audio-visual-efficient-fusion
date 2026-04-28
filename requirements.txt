@@ -16,5 +16,5 @@ Pillow>=10.0.0
 kagglehub>=0.2.0
 
 # For llama-cpp inference (Gemma GGUF)
-llama-cpp-python>=0.2.0
+#llama-cpp-python>=0.2.0
 huggingface-hub>=0.20.0

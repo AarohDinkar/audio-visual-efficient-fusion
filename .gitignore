@@ -60,6 +60,7 @@ Thumbs.db
 # ============ Logs & Temp ============
 *.log
 logs/
+results/
 tmp/
 temp/
 *.tmp

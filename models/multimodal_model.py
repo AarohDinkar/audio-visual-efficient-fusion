@@ -75,6 +75,8 @@ class AudioVisualCaptioner(nn.Module):
         audio: torch.Tensor,
         captions: Optional[List[str]] = None,
         max_new_tokens: int = 64,
+        modality: str = "audio_visual",
+        return_embeddings: bool = False,
     ) -> dict:
         """
         Forward pass - generate captions from video.
@@ -95,6 +97,13 @@ class AudioVisualCaptioner(nn.Module):
         # Encode
         vision_emb = self.vision_enc(frames)
         audio_emb = self.audio_enc(audio)
+
+        if modality == "vision_only":
+            audio_emb = torch.zeros_like(audio_emb)
+        elif modality == "audio_only":
+            vision_emb = torch.zeros_like(vision_emb)
+        elif modality != "audio_visual":
+            raise ValueError(f"Unsupported modality: {modality}")
 
         # Fuse
         fused = self.fusion(vision_emb, audio_emb)  # [B, llm_dim * num_prefix]
@@ -118,10 +127,16 @@ class AudioVisualCaptioner(nn.Module):
             prefix_labels = torch.full((B, self.num_prefix_tokens), -100, device=device, dtype=caption_ids.dtype)
             labels = torch.cat([prefix_labels, caption_ids], dim=1)
             outputs = self.llm(inputs_embeds=full_emb, labels=labels)
-            return {"loss": outputs.loss, "logits": outputs.logits}
+            result = {"loss": outputs.loss, "logits": outputs.logits}
+            if return_embeddings:
+                result.update({"vision_emb": vision_emb, "audio_emb": audio_emb})
+            return result
         else:
             # Inference: generate
-            return self._generate(prefix_emb, max_new_tokens, device)
+            result = self._generate(prefix_emb, max_new_tokens, device)
+            if return_embeddings:
+                result.update({"vision_emb": vision_emb, "audio_emb": audio_emb})
+            return result
 
     def _generate(self, prefix_emb: torch.Tensor, max_new_tokens: int, device: torch.device):
         """Generate caption from prefix embedding."""
