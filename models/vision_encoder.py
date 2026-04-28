@@ -67,7 +67,13 @@ class CLIPVisionEncoder(nn.Module):
         frames_flat = (frames_flat - mean) / std
 
         with torch.no_grad():
-            vision_outputs = self.model.get_image_features(pixel_values=frames_flat)
+            output = self.model.get_image_features(pixel_values=frames_flat)
+            # Handle both tensor and output object cases
+            if isinstance(output, torch.Tensor):
+                vision_outputs = output
+            else:
+                # Extract pooled image embeddings from output object
+                vision_outputs = output.pooler_output if hasattr(output, 'pooler_output') else output
 
         # Reshape back: [B*T, 512] -> [B, T, 512]
         vision_outputs = vision_outputs.view(batch_size, num_frames, -1)

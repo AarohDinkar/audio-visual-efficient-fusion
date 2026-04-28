@@ -36,22 +36,32 @@ def bleu(reference: str, hypothesis: str, max_n: int = 4) -> float:
     if not ref_tokens:
         return 0.0
 
+    effective_order = min(max_n, len(ref_tokens), len(hyp_tokens))
+    if effective_order == 0:
+        return 0.0
+
     precisions = []
-    for n in range(1, max_n + 1):
+    for n in range(1, effective_order + 1):
         ref_ngrams = Counter(zip(*(ref_tokens[i:] for i in range(n))))
         hyp_ngrams = Counter(zip(*(hyp_tokens[i:] for i in range(n))))
         if not hyp_ngrams:
-            precisions.append(0.0)
+            precisions.append(1e-10)
             continue
         overlap = sum((ref_ngrams & hyp_ngrams).values())
         total = sum(hyp_ngrams.values())
-        precisions.append(overlap / total if total > 0 else 0.0)
+        if overlap == 0:
+            # Chen-Cherry style smoothing keeps short captions from collapsing
+            # to zero when a higher-order n-gram is absent.
+            precisions.append(1.0 / (2 ** n * total))
+        else:
+            precisions.append(overlap / total if total > 0 else 0.0)
 
-    # Smoothed: avoid log(0)
-    log_prec = sum(np.log(p + 1e-10) for p in precisions) / max_n
-    brevity = len(ref_tokens) / len(hyp_tokens) if hyp_tokens else 0
-    bp = min(1.0, brevity) if brevity > 0 else 0.0
-    return bp * np.exp(log_prec)
+    log_prec = sum(np.log(p + 1e-10) for p in precisions) / effective_order
+    if len(hyp_tokens) > len(ref_tokens):
+        bp = 1.0
+    else:
+        bp = np.exp(1 - len(ref_tokens) / len(hyp_tokens))
+    return float(min(1.0, bp * np.exp(log_prec)))
 
 
 def rouge_l(reference: str, hypothesis: str) -> float:
@@ -85,7 +95,7 @@ def rouge_l(reference: str, hypothesis: str) -> float:
     recall = lcs / m if m > 0 else 0
     if precision + recall == 0:
         return 0.0
-    return 2 * precision * recall / (precision + recall)
+    return float(2 * precision * recall / (precision + recall))
 
 
 def recall_at_k(
@@ -121,7 +131,7 @@ def recall_at_k(
             retrieved = [gallery_labels[j] for j in topk[i]]
             if qlabel in retrieved:
                 hits += 1
-        results[f"R@{k}"] = hits / len(query_labels) if query_labels else 0.0
+        results[f"R@{k}"] = float(hits / len(query_labels)) if query_labels else 0.0
     return results
 
 
@@ -140,6 +150,6 @@ def compute_caption_metrics(references: list[str], hypotheses: list[str]) -> dic
     bleu_scores = [bleu(r, h) for r, h in zip(references, hypotheses)]
     rouge_scores = [rouge_l(r, h) for r, h in zip(references, hypotheses)]
     return {
-        "BLEU": np.mean(bleu_scores),
-        "ROUGE-L": np.mean(rouge_scores),
+        "BLEU": float(np.mean(bleu_scores)),
+        "ROUGE-L": float(np.mean(rouge_scores)),
     }

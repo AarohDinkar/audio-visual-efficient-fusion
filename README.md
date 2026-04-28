@@ -154,6 +154,45 @@ python evaluation/evaluate.py --limit 50 --checkpoint checkpoints/fusion_gated_e
 
 **Metrics:** BLEU, ROUGE-L
 
+## Research-Paper Experiment Workflow
+
+Before training, validate that the preprocessed dataset has real captions:
+
+```bash
+python scripts/validate_dataset.py
+```
+
+If validation reports placeholder captions such as `"A video."`, repair the
+metadata from the MSR-VTT annotation JSON:
+
+```bash
+python scripts/repair_captions.py --annotations data/train_val_videodatainfo.json
+```
+
+Dry-run the full ablation matrix:
+
+```bash
+python experiments/run_research_suite.py --stage local
+```
+
+Execute the local proof run:
+
+```bash
+python experiments/run_research_suite.py --stage local --execute
+```
+
+The suite covers:
+- BLIP vision-only baseline
+- audio-only and video-only modality ablations
+- gated vs additive audio-visual fusion
+- contrastive audio-visual alignment loss
+- noisy audio and frame-dropout robustness ablations
+- Recall@K retrieval
+- quantized and unquantized latency/memory benchmarks
+
+Paper tables and limitations are scaffolded in `reports/research_paper.md`.
+Raw metrics are written to `results/*.json`.
+
 ## Configuration
 
 Edit `config.py` to change:
