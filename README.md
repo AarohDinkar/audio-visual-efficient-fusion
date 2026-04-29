@@ -84,114 +84,133 @@ audio_visual_llm/
 └── README.md
 ```
 
-## Quick Start
+## Quick Start (OS-Agnostic)
 
+### Step 1: Clone & Setup Environment
 ```bash
-# 1. Install
-pip install -r requirements.txt
+git clone <repo>
+cd audio-visual-efficient-fusion
 
-# 2. Download dataset (Kaggle - requires kaggle.json)
-python scripts/download_dataset.py
+# Windows
+python -m venv .venv
+.\.venv\Scripts\activate
 
-# 3. Preprocess
-python scripts/preprocess_video.py --limit 100
-
-# 4. Train
-python training/train_fusion.py --epochs 3 --batch-size 4 --max-samples 100
-
-# 5. Demo
-python demo/demo.py path/to/video.mp4 --checkpoint checkpoints/fusion_gated_epoch3.pt
+# Linux / macOS
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-## Dataset: MSR-VTT
+### Step 2: Install Dependencies
+```bash
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+```
 
-MSR-VTT contains ~10k videos with captions. **Not included in repo**—download separately.
+**Note on GPU Support:**
+- **Automatic Detection:** The project automatically detects and uses CUDA (NVIDIA GPU) if available
+- Uses `float16` precision on GPU for faster training, `float32` on CPU
+- For faster llama-cpp inference on Mac, enable Metal: `CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python`
 
-### Download from Kaggle
+### Step 3: Download Dataset (Kaggle - requires API key)
 ```bash
 pip install kagglehub
-# Set up ~/.kaggle/kaggle.json with your API key
+# Set up ~/.kaggle/kaggle.json with your Kaggle API key
 python scripts/download_dataset.py
 ```
 
-### Preprocessing
+Or **create synthetic data (no download):**
 ```bash
-# After videos are in data/videos/:
-python scripts/preprocess_video.py --limit 100
-
-# Or create synthetic data (no download):
-python scripts/create_sample_data.py -n 10
+python scripts/create_sample_data.py -n 100
 ```
 
-## Training
-
+### Step 4: Preprocess Videos
 ```bash
-# Train gated fusion (uses TinyLlama - no HF login)
+python scripts/preprocess_video.py --limit 100
+```
+
+Validates dataset:
+```bash
+python scripts/validate_dataset.py
+```
+
+### Step 5: Train Fusion Model
+```bash
+# Gated fusion (recommended)
 python training/train_fusion.py --epochs 3 --batch-size 4 --max-samples 100
 
 # Additive fusion (baseline)
 python training/train_fusion.py --fusion-type additive --epochs 3
 ```
 
-## Demo
+**GPU/CPU:** Training automatically uses available GPU; falls back to CPU if not available.
 
+### Step 6: Evaluate & Demo
 ```bash
-# Llama-cpp backend (default) - uses TinyLlama GGUF, no checkpoint needed
+# Evaluate on 100 samples
+python evaluation/evaluate.py --limit 100 --checkpoint checkpoints/fusion_gated_epoch1.pt
+
+# Interactive demo (no checkpoint needed, uses llama-cpp backend)
 python demo/demo.py path/to/video.mp4
 
-# With transformers checkpoint (trained fusion)
-python demo/demo.py path/to/video.mp4 --checkpoint checkpoints/fusion_gated_epoch3.pt
-
-# Longer captions
-python demo/demo.py path/to/video.mp4 --max-tokens 256
+# Demo with trained checkpoint
+python demo/demo.py path/to/video.mp4 --checkpoint checkpoints/fusion_gated_epoch3.pt --max-tokens 128
 ```
 
-## Evaluation
-
+### Step 7: Full Research Experiment Suite
 ```bash
-python evaluation/evaluate.py --limit 50 --checkpoint checkpoints/fusion_gated_epoch3.pt
-```
-
-**Metrics:** BLEU, ROUGE-L
-
-## Research-Paper Experiment Workflow
-
-Before training, validate that the preprocessed dataset has real captions:
-
-```bash
-python scripts/validate_dataset.py
-```
-
-If validation reports placeholder captions such as `"A video."`, repair the
-metadata from the MSR-VTT annotation JSON:
-
-```bash
-python scripts/repair_captions.py --annotations data/train_val_videodatainfo.json
-```
-
-Dry-run the full ablation matrix:
-
-```bash
+# Dry-run (no execution)
 python experiments/run_research_suite.py --stage local
+
+# Execute full suite (may take hours on CPU)
+python experiments/run_research_suite.py --stage local --execute
 ```
 
-Execute the local proof run:
+## Troubleshooting
+
+### No GPU Detected
+- Check CUDA installation: `python -c "import torch; print(torch.cuda.is_available())"`
+- If False, install CUDA Toolkit 11.8+ and PyTorch with CUDA support:
+  ```bash
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+  ```
+
+### Dataset Download Issues
+- Kaggle API key not found: Ensure `~/.kaggle/kaggle.json` exists with valid credentials
+- Rate limiting: Wait a few hours or use synthetic data: `python scripts/create_sample_data.py -n 100`
+
+### Training Memory Issues (CPU)
+- Reduce batch size: `--batch-size 2`
+- Reduce samples: `--max-samples 50`
+- On GPU with limited VRAM: Try same adjustments
+
+## Research-Paper Experiment Workflow (Optional)
+
+For the full ablation study:
 
 ```bash
-python experiments/run_research_suite.py --stage local --execute
+# Validate dataset before running
+python scripts/validate_dataset.py
+
+# Repair captions if needed
+python scripts/repair_captions.py --annotations data/train_val_videodatainfo.json
+
+# Dry-run experiment matrix
+python experiments/run_research_suite.py --stage local
+
+# Execute full suite (very slow on CPU, recommended on GPU)
+HF_HUB_DISABLE_SYMLINKS_WARNING=1 python experiments/run_research_suite.py --stage local --execute
 ```
 
 The suite covers:
 - BLIP vision-only baseline
-- audio-only and video-only modality ablations
-- gated vs additive audio-visual fusion
-- contrastive audio-visual alignment loss
-- noisy audio and frame-dropout robustness ablations
-- Recall@K retrieval
-- quantized and unquantized latency/memory benchmarks
+- Audio-only, video-only modality ablations
+- Gated vs additive fusion
+- Contrastive alignment loss
+- Robustness: noisy audio, frame dropout
+- Recall@K retrieval benchmarks
+- Latency & memory profiling (GPU vs CPU quantized)
 
-Paper tables and limitations are scaffolded in `reports/research_paper.md`.
-Raw metrics are written to `results/*.json`.
+Results written to `results/*.json`. Paper scaffold in `reports/research_paper.md`.
 
 ## Configuration
 
@@ -200,16 +219,27 @@ Edit `config.py` to change:
 - `LLM_MODEL`: TinyLlama (default, no login) or Gemma (gated)
 - `LLAMA_CPP_REPO_ID` / `LLAMA_CPP_FILENAME`: GGUF model for inference
 
-## Installation
+## Installation & System Requirements
 
+### Prerequisites
+- **Python 3.9+** (3.10+ recommended)
+- **Virtual environment** (venv, conda, or poetry)
+
+### GPU Support (Recommended)
+This project **automatically detects and uses GPU if available**:
+- **NVIDIA CUDA:** Automatically detected and used for training/inference
+  - Requires CUDA Toolkit 11.8+ and cuDNN installed
+  - Training time: ~1 hour per epoch (vs 50+ minutes on CPU)
+- **Mac Metal:** Enable for faster llama-cpp inference:
+  ```bash
+  CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python
+  ```
+- **CPU Fallback:** All operations work on CPU (slower but works everywhere)
+
+### Install Dependencies
 ```bash
-cd audio_visual_llm
 pip install -r requirements.txt
 ```
-
-- **Python 3.9+** (3.10 recommended)
-- **GPU** recommended for training
-- **Metal** (Mac) or **CUDA** for faster llama-cpp: `CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python`
 
 ## What's Not in the Repo
 
