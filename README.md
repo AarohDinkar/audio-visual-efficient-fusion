@@ -4,7 +4,7 @@ A **research demo project** demonstrating that combining **audio + vision** prod
 
 ## Project Overview
 
-This system takes a short video with audio as input and generates a natural language description using both visual and audio information. It compares against a vision-only baseline (BLIP) to show the benefit of multimodal fusion.
+The primary research path trains lightweight audio-visual fusion layers for retrieval/alignment, without requiring an LLM. The LLM captioner remains available as an optional language-rendering demo, but the core benchmark is whether fused audio+video embeddings retrieve the correct captions better than single-modality baselines.
 
 **Example:**
 - **Input:** Video of dog running and barking

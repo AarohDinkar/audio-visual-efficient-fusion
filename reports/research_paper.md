@@ -2,11 +2,11 @@
 
 ## Abstract
 
-This study evaluates whether a low-parameter local language model equipped with lightweight audio-visual fusion can produce richer scene descriptions than a vision-only baseline while preserving inference efficiency for physical-AI settings.
+This study evaluates whether lightweight audio-visual fusion can improve local scene understanding over vision-only processing while preserving inference efficiency for physical-AI settings. The primary model is a non-LLM fusion/retrieval model; an LLM is treated as an optional language rendering component.
 
 ## Method
 
-The system uses CLIP ViT-B/32 for visual frame embeddings, Whisper tiny for audio embeddings, and TinyLlama as the local language model. Audio and visual features are combined with either additive fusion or gated fusion. The gated layer avoids heavy cross-attention by projecting both modalities to a shared space and learning a sigmoid gate over the two signals.
+The system uses CLIP ViT-B/32 for visual frame embeddings, Whisper tiny for audio embeddings, and CLIP text embeddings as the retrieval target. Audio and visual features are combined with either additive fusion or gated fusion. The gated layer avoids heavy cross-attention by projecting both modalities to a shared space and learning a sigmoid gate over the two signals. A local LLM can optionally convert structured or retrieved evidence into natural language, but it is not part of the core proof.
 
 ## Experiment Matrix
 

@@ -25,6 +25,16 @@ from evaluation.metrics import recall_at_k
 from scripts.validate_dataset import validate_captions
 
 
+def extract_feature_tensor(output, field: str) -> torch.Tensor:
+    if isinstance(output, torch.Tensor):
+        return output
+    if hasattr(output, field):
+        return getattr(output, field)
+    if hasattr(output, "pooler_output"):
+        return output.pooler_output
+    raise TypeError(f"Unsupported CLIP output type: {type(output)}")
+
+
 def load_samples(captions_path: Path, limit: Optional[int] = None) -> list[dict]:
     with open(captions_path) as f:
         samples = json.load(f)
@@ -37,7 +47,8 @@ def encode_video_frames(model: CLIPModel, frames: torch.Tensor, device: torch.de
     std = torch.tensor([0.26862954, 0.26130258, 0.27577711], device=device).view(1, 3, 1, 1)
     frames = (frames - mean) / std
     with torch.no_grad():
-        features = model.get_image_features(pixel_values=frames)
+        output = model.get_image_features(pixel_values=frames)
+        features = extract_feature_tensor(output, "image_embeds")
     return features.mean(dim=0)
 
 
@@ -65,7 +76,8 @@ def run_retrieval(
 
         text_inputs = processor(text=[sample["caption"]], return_tensors="pt", padding=True, truncation=True).to(device)
         with torch.no_grad():
-            text_features = model.get_text_features(**text_inputs)
+            text_output = model.get_text_features(**text_inputs)
+            text_features = extract_feature_tensor(text_output, "text_embeds")
         text_embeddings.append(text_features.squeeze(0).cpu().numpy())
         labels.append(sample.get("video_id", str(len(labels))))
 
