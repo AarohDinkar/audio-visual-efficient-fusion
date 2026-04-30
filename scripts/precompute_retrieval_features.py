@@ -23,6 +23,41 @@ from models.vision_encoder import CLIPVisionEncoder
 from scripts.validate_dataset import validate_captions
 
 
+AUDIO_KEYWORDS = {
+    "audio",
+    "sound",
+    "sounds",
+    "music",
+    "song",
+    "sing",
+    "singing",
+    "sings",
+    "talk",
+    "talking",
+    "speaking",
+    "speech",
+    "voice",
+    "voices",
+    "laugh",
+    "laughing",
+    "clap",
+    "clapping",
+    "cheer",
+    "cheering",
+    "shout",
+    "shouting",
+    "cry",
+    "crying",
+    "bark",
+    "barking",
+    "noise",
+    "guitar",
+    "piano",
+    "drum",
+    "drums",
+}
+
+
 def _extract_tensor(output, field: str) -> torch.Tensor:
     if isinstance(output, torch.Tensor):
         return output
@@ -37,9 +72,15 @@ def load_samples(
     captions_path: Path,
     limit: Optional[int],
     one_caption_per_video: bool = False,
+    audio_keywords_only: bool = False,
 ) -> list[dict]:
     with open(captions_path, encoding="utf-8") as f:
         samples = json.load(f)
+    if audio_keywords_only:
+        samples = [
+            sample for sample in samples
+            if any(keyword in sample["caption"].lower() for keyword in AUDIO_KEYWORDS)
+        ]
     if one_caption_per_video:
         seen = set()
         unique_samples = []
@@ -58,12 +99,18 @@ def precompute_features(
     output: Path = Path("data/processed/retrieval_features.pt"),
     limit: Optional[int] = None,
     one_caption_per_video: bool = False,
+    audio_keywords_only: bool = False,
     device: Optional[str] = None,
     validate_dataset: bool = True,
 ) -> dict:
     if validate_dataset:
         validate_captions(captions_path)
-    samples = load_samples(captions_path, limit, one_caption_per_video=one_caption_per_video)
+    samples = load_samples(
+        captions_path,
+        limit,
+        one_caption_per_video=one_caption_per_video,
+        audio_keywords_only=audio_keywords_only,
+    )
     if not samples:
         raise ValueError("No samples loaded.")
 
@@ -114,6 +161,7 @@ def precompute_features(
             "captions_path": str(captions_path),
             "limit": limit,
             "one_caption_per_video": one_caption_per_video,
+            "audio_keywords_only": audio_keywords_only,
             "num_samples": len(records),
             "num_unique_videos": len(av_cache),
             "vision_encoder": VISION_ENCODER,
@@ -132,6 +180,7 @@ def main():
     parser.add_argument("--output", type=Path, default=Path("data/processed/retrieval_features.pt"))
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--one-caption-per-video", action="store_true")
+    parser.add_argument("--audio-keywords-only", action="store_true")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--skip-dataset-validation", action="store_true")
     args = parser.parse_args()
@@ -140,6 +189,7 @@ def main():
         output=args.output,
         limit=args.limit,
         one_caption_per_video=args.one_caption_per_video,
+        audio_keywords_only=args.audio_keywords_only,
         device=args.device,
         validate_dataset=not args.skip_dataset_validation,
     )
