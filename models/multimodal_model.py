@@ -38,7 +38,7 @@ class AudioVisualCaptioner(nn.Module):
         self.audio_enc = WhisperAudioEncoder(audio_encoder, project_to_512=True)
         self.llm = AutoModelForCausalLM.from_pretrained(
             llm_name,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             device_map="auto" if torch.cuda.is_available() else None,
         )
         self.tokenizer = AutoTokenizer.from_pretrained(llm_name)

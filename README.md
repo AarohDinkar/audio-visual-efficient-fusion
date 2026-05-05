@@ -4,7 +4,7 @@ A **research demo project** demonstrating that combining **audio + vision** prod
 
 ## Project Overview
 
-This system takes a short video with audio as input and generates a natural language description using both visual and audio information. It compares against a vision-only baseline (BLIP) to show the benefit of multimodal fusion.
+The primary research path trains lightweight audio-visual fusion layers for retrieval/alignment, without requiring an LLM. The LLM captioner remains available as an optional language-rendering demo, but the core benchmark is whether fused audio+video embeddings retrieve the correct captions better than single-modality baselines.
 
 **Example:**
 - **Input:** Video of dog running and barking
@@ -58,158 +58,221 @@ VISION EMBEDDING (512D)     AUDIO EMBEDDING (512D)
 ## Project Structure
 
 ```
-audio_visual_llm/
-├── config.py                 # Configuration
-├── requirements.txt          # Dependencies
+audio-visual-efficient-fusion/
+├── config.py                            # Configuration
+├── requirements.txt                     # Dependencies
 ├── models/
-│   ├── fusion.py             # EfficientFusionLayer, AdditiveFusionLayer
-│   ├── vision_encoder.py     # CLIP encoder
-│   ├── audio_encoder.py     # Whisper/HuBERT encoder
-│   ├── multimodal_model.py  # Full pipeline (transformers)
-│   └── multimodal_model_llamacpp.py  # Llama-cpp inference
+│   ├── fusion.py                        # EfficientFusionLayer, AdditiveFusionLayer
+│   ├── retrieval_fusion.py              # Lightweight fusion for retrieval (NEW)
+│   ├── vision_encoder.py                # CLIP encoder
+│   ├── audio_encoder.py                 # Whisper/HuBERT encoder
+│   ├── multimodal_model.py              # Full pipeline (transformers) [optional LLM]
+│   └── multimodal_model_llamacpp.py     # Llama-cpp inference
 ├── scripts/
-│   ├── download_dataset.py   # MSR-VTT from Kaggle
-│   ├── preprocess_video.py   # Extract frames + audio
-│   └── create_sample_data.py # Synthetic data for testing
+│   ├── download_dataset.py              # MSR-VTT from Kaggle
+│   ├── preprocess_video.py              # Extract frames + audio
+│   ├── precompute_retrieval_features.py # Cache CLIP/Whisper/text embeddings (NEW)
+│   ├── create_sample_data.py            # Synthetic data for testing
+│   ├── validate_dataset.py              # Check captions & data integrity
+│   └── repair_captions.py               # Fix placeholder captions
 ├── training/
-│   └── train_fusion.py       # Train fusion layer
+│   ├── train_retrieval_fusion.py        # Train fusion head for retrieval (NEW)
+│   └── train_fusion.py                  # Train LLM captioning [optional]
 ├── evaluation/
-│   ├── metrics.py            # BLEU, ROUGE-L, Recall@K
-│   ├── evaluate.py           # Compare BLIP vs Multimodal
-│   └── efficiency_test.py   # Latency & memory
+│   ├── evaluate_retrieval_fusion.py     # Eval Recall@K for retrieval (NEW)
+│   ├── retrieval.py                     # Legacy retrieval with encoders
+│   ├── evaluate.py                      # LLM captioning eval [optional]
+│   ├── metrics.py                       # BLEU, ROUGE-L, Recall@K
+│   └── efficiency_test.py               # Latency & memory profiling
 ├── demo/
-│   └── demo.py               # Interactive demo
-├── data/                     # (empty - add videos after clone)
-│   └── videos/               # Place .mp4/.avi here
-└── README.md
+│   └── demo.py                          # Interactive LLM demo [optional]
+├── docs/
+│   └── non_llm_retrieval_workflow.md    # Primary workflow (NEW)
+├── experiments/
+│   └── run_research_suite.py            # Full ablation study
+├── reports/
+│   └── research_paper.md                # Results & analysis
+├── data/
+│   ├── videos/                          # Raw video files (after download)
+│   ├── audio/                           # Extracted audio features
+│   ├── captions.json                    # Processed captions
+│   └── processed/                       # Precomputed embeddings cache
+├── checkpoints/                         # Model weights (gated, additive, retrieval)
+└── results/                             # Training metrics & evaluation results
 ```
 
-## Quick Start
+## Quick Start: Retrieval Workflow (Recommended)
 
+This is the primary path: train a lightweight fusion layer for **audio-visual retrieval** using contrastive loss.
+
+### Prerequisites
 ```bash
-# 1. Install
+git clone <repo>
+cd audio-visual-efficient-fusion
+
+# Windows
+python -m venv .venv
+.\.venv\Scripts\activate
+
+# Linux / macOS
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
+```
 
-# 2. Download dataset (Kaggle - requires kaggle.json)
+### Step 1: Download & Preprocess Videos
+```bash
+# Download MSR-VTT (requires Kaggle API key)
 python scripts/download_dataset.py
 
-# 3. Preprocess
+# Or create synthetic data (no download)
+python scripts/create_sample_data.py -n 100
+
+# Extract frames & audio
 python scripts/preprocess_video.py --limit 100
 
-# 4. Train
-python training/train_fusion.py --epochs 3 --batch-size 4 --max-samples 100
-
-# 5. Demo
-python demo/demo.py path/to/video.mp4 --checkpoint checkpoints/fusion_gated_epoch3.pt
-```
-
-## Dataset: MSR-VTT
-
-MSR-VTT contains ~10k videos with captions. **Not included in repo**—download separately.
-
-### Download from Kaggle
-```bash
-pip install kagglehub
-# Set up ~/.kaggle/kaggle.json with your API key
-python scripts/download_dataset.py
-```
-
-### Preprocessing
-```bash
-# After videos are in data/videos/:
-python scripts/preprocess_video.py --limit 100
-
-# Or create synthetic data (no download):
-python scripts/create_sample_data.py -n 10
-```
-
-## Training
-
-```bash
-# Train gated fusion (uses TinyLlama - no HF login)
-python training/train_fusion.py --epochs 3 --batch-size 4 --max-samples 100
-
-# Additive fusion (baseline)
-python training/train_fusion.py --fusion-type additive --epochs 3
-```
-
-## Demo
-
-```bash
-# Llama-cpp backend (default) - uses TinyLlama GGUF, no checkpoint needed
-python demo/demo.py path/to/video.mp4
-
-# With transformers checkpoint (trained fusion)
-python demo/demo.py path/to/video.mp4 --checkpoint checkpoints/fusion_gated_epoch3.pt
-
-# Longer captions
-python demo/demo.py path/to/video.mp4 --max-tokens 256
-```
-
-## Evaluation
-
-```bash
-python evaluation/evaluate.py --limit 50 --checkpoint checkpoints/fusion_gated_epoch3.pt
-```
-
-**Metrics:** BLEU, ROUGE-L
-
-## Research-Paper Experiment Workflow
-
-Before training, validate that the preprocessed dataset has real captions:
-
-```bash
+# Validate
 python scripts/validate_dataset.py
 ```
 
-If validation reports placeholder captions such as `"A video."`, repair the
-metadata from the MSR-VTT annotation JSON:
-
+### Step 2: Precompute Embeddings (CPU-Friendly Cache)
 ```bash
-python scripts/repair_captions.py --annotations data/train_val_videodatainfo.json
+# Cache CLIP vision, Whisper audio, and CLIP text embeddings
+python scripts/precompute_retrieval_features.py --limit 50 \
+  --one-caption-per-video \
+  --output data/processed/retrieval_features_unique50.pt
 ```
 
-Dry-run the full ablation matrix:
+This caches embeddings, so training only needs to learn the fusion head (fast!).
 
+### Step 3: Train Fusion Head
 ```bash
-python experiments/run_research_suite.py --stage local
+# Gated fusion (recommended)
+python training/train_retrieval_fusion.py \
+  --cache data/processed/retrieval_features_unique50.pt \
+  --fusion-type gated \
+  --epochs 20 \
+  --batch-size 16 \
+  --run-name gated_retrieval_50
+
+# Additive fusion (baseline)
+python training/train_retrieval_fusion.py \
+  --cache data/processed/retrieval_features_unique50.pt \
+  --fusion-type additive \
+  --epochs 20 \
+  --run-name additive_retrieval_50
 ```
 
-Execute the local proof run:
+### Step 4: Evaluate
+```bash
+# Evaluate audio+video vs vision-only vs audio-only
+python evaluation/evaluate_retrieval_fusion.py \
+  --cache data/processed/retrieval_features_unique50.pt \
+  --checkpoint checkpoints/gated_retrieval_50.pt \
+  --fusion-type gated \
+  --modality audio_visual \
+  --run-name gated_retrieval_50_av_eval
+```
+
+**Metrics:** Recall@1, Recall@5, Recall@10 (how often correct caption is in top-K retrieved)
+
+**Example Results (50 unique videos, 20 epochs):**
+```json
+{
+  "gated_retrieval_50": {
+    "audio_visual": { "R@1": 0.86, "R@5": 0.96, "R@10": 1.0 },
+    "vision_only": { "R@1": 0.80, "R@5": 0.94, "R@10": 1.0 },
+    "audio_only": { "R@1": 0.12, "R@5": 0.36, "R@10": 0.68 }
+  }
+}
+```
+
+---
+
+## Optional: LLM Captioning (Legacy Path)
+
+The LLM approach (TinyLlama captioning) is available but **not recommended** for small datasets (underfits). Use only if:
+- You have 1000+ unique videos with varied captions
+- You can GPU-train for 10+ epochs
+- You want natural language generation, not retrieval
 
 ```bash
+### Step 5: Train LLM (Optional, Large Data Only)
+python training/train_fusion.py --epochs 3 --batch-size 4 --max-samples 1000
+
+### Step 6: Evaluate LLM (Optional)
+python evaluation/evaluate.py --limit 100 --checkpoint checkpoints/fusion_gated_epoch3.pt
+
+### Step 7: Demo (Optional)
+python demo/demo.py path/to/video.mp4 --checkpoint checkpoints/fusion_gated_epoch3.pt
+```
+
+## Troubleshooting
+
+### No GPU Detected
+- Check CUDA installation: `python -c "import torch; print(torch.cuda.is_available())"`
+- If False, install CUDA Toolkit 11.8+ and PyTorch with CUDA support:
+  ```bash
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+  ```
+
+### Dataset Download Issues
+- Kaggle API key not found: Ensure `~/.kaggle/kaggle.json` exists with valid credentials
+- Rate limiting: Wait a few hours or use synthetic data: `python scripts/create_sample_data.py -n 100`
+
+### Training Memory Issues (CPU/GPU)
+- Reduce batch size: `--batch-size 2`
+- Reduce samples: `--max-samples 50`
+- For retrieval: embeddings are cached, so memory is minimal
+- For LLM: requires more VRAM; use GPU or reduce to CPU-friendly sizes
+
+## Retrieval vs Captioning: Which Path?
+
+| Aspect | Retrieval (Recommended) | LLM Captioning |
+|---|---|---|
+| **Task** | Match video to caption | Generate caption text |
+| **Metric** | Recall@K | BLEU, ROUGE-L |
+| **Training Speed** | 5-30 min/epoch (CPU) | 1h+ per epoch (GPU needed) |
+| **Data Needed** | 50-500 unique videos | 1000+ diverse captions |
+| **When to Use** | Measure audio-vision fusion | Qualitative demos, language generation |
+| **Output** | Ranking of captions | Natural language description |
+
+**Recommendation:** Start with **retrieval**. It's CPU-friendly (embeddings cached) and gives clear metrics.
+
+## Research-Paper Experiment Workflow
+
+For full ablation study comparing architectures and modalities:
+
+```bash
+# Validate dataset
+python scripts/validate_dataset.py
+
+# Precompute for retrieval (primary path)
+python scripts/precompute_retrieval_features.py --limit 100 --one-caption-per-video
+
+# Train and evaluate both fusion types
+python training/train_retrieval_fusion.py --cache data/processed/retrieval_features_100.pt --fusion-type gated --epochs 20
+python training/train_retrieval_fusion.py --cache data/processed/retrieval_features_100.pt --fusion-type additive --epochs 20
+python evaluation/evaluate_retrieval_fusion.py --cache data/processed/retrieval_features_100.pt --checkpoint checkpoints/gated_*.pt --modality audio_visual
+```
+
+Full suite with LLM ablations:
+
+```bash
+# Optional: run legacy LLM experiment suite (slow, GPU recommended)
 python experiments/run_research_suite.py --stage local --execute
 ```
 
-The suite covers:
-- BLIP vision-only baseline
-- audio-only and video-only modality ablations
-- gated vs additive audio-visual fusion
-- contrastive audio-visual alignment loss
-- noisy audio and frame-dropout robustness ablations
-- Recall@K retrieval
-- quantized and unquantized latency/memory benchmarks
-
-Paper tables and limitations are scaffolded in `reports/research_paper.md`.
-Raw metrics are written to `results/*.json`.
+Results saved to `results/*.json`. Analysis scaffold in `reports/research_paper.md`.
 
 ## Configuration
 
-Edit `config.py` to change:
-- `LLM_BACKEND`: `"llama_cpp"` (demo) or `"transformers"` (training)
-- `LLM_MODEL`: TinyLlama (default, no login) or Gemma (gated)
-- `LLAMA_CPP_REPO_ID` / `LLAMA_CPP_FILENAME`: GGUF model for inference
-
-## Installation
-
-```bash
-cd audio_visual_llm
-pip install -r requirements.txt
-```
-
-- **Python 3.9+** (3.10 recommended)
-- **GPU** recommended for training
-- **Metal** (Mac) or **CUDA** for faster llama-cpp: `CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python`
+Edit `config.py` to customize:
+- `LLM_BACKEND`: `"llama_cpp"` (inference) or `"transformers"` (training)
+- `LLM_MODEL`: Model name for captioning (TinyLlama, Gemma)
+- CLIP, Whisper model versions
 
 ## What's Not in the Repo
 
